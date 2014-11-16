@@ -871,7 +871,7 @@ def read_montage(kind, ch_names=None, path=None, scale=True):
             ff = fid.read().decode().lower()
         locs = {}
         pos = re.findall('eeg\s(\w+)\s(-?[\d,.]+)\s(-?[\d,.]+)\s(-?[\d,.]+)',
-                          ff)
+                         ff)
         fids = re.findall('cardinal\s([\d,.]+)\s(-?[\d,.]+)\s(-?[\d,.]+)\s(-?'
                           '[\d,.]+)', ff)
         pos.extend(fids)
@@ -946,7 +946,7 @@ def apply_montage(info, montage):
 
 def apply_fiducials(info, montage):
     """Apply fiducials to EEG data.
-    
+
     Parameters
     ----------
     info : instance of Info
@@ -955,7 +955,7 @@ def apply_fiducials(info, montage):
         The montage to apply.
     """
     fids = montage.fids
-    
+
     for point in info['dig']:
         if point['kind'] == FIFF.FIFFV_POINT_CARDINAL:
             info['dig'].pop(point)
