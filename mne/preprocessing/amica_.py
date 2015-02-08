@@ -304,8 +304,10 @@ def mne_amica(data,
 #    r.filter(filter_low,filter_high, n_jobs=max_threads) # set n of jobs parametrically
     if not n_chans:
         n_chans = len(data.info['chs'])-1
-    if not pcakeep:
+    if not max_pca_components:
         pcakeep = n_chans
+    else:
+        pcakeep = max_pca_components
     n_rank = r.estimate_rank()
     if pcakeep > n_rank:
        print('''Non-fatal warning: 
