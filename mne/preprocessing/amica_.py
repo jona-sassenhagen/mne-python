@@ -295,7 +295,7 @@ def mne_amica(data,
         pcakeep = n_chans
     else:
         pcakeep = max_pca_components
-    n_rank = data.estimate_rank()
+    n_rank = np.linalg.matrix_rank(data)
     if pcakeep > n_rank:
        print('''Non-fatal warning: 
     data is rank deficient (channel interpolated? reference included? comps removed?),
