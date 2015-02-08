@@ -282,7 +282,7 @@ def loadmodout_convert(targetdir):
 def mne_amica(data,
               max_iter = 2000, 
                  doPCA = 1, 
-               pcakeep = max_pca_components, 
+               max_pca_components = None, 
             filter_low = 1, 
            filter_high = 40,
            n_chans = None, # adapt this so only a selection of channels can be included?
@@ -319,7 +319,7 @@ def mne_amica(data,
     paramfile = targetdir + 'paramfile'
 
     write_paramfile(data, outfile, targetdir, paramfile, max_iter=max_iter, 
-        max_threads = max_threads, numprocs = numprocs, doPCA=1, pcakeep = pcakeep, num_mix_comps = 1)
+        max_threads = max_threads, numprocs = numprocs, doPCA=1, pcakeep = max_pca_components, num_mix_comps = 1)
     call([amica_binary + ' ' + paramfile], shell=True)
     
     W, A, S = loadmodout_convert(targetdir)
