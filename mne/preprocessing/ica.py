@@ -20,7 +20,7 @@ from .ecg import (qrs_detector, _get_ecg_channel_index, _make_ecg,
                   create_ecg_epochs)
 from .eog import _find_eog_events, _get_eog_channel_index
 from .infomax_ import infomax
-from .amica_ import mne_
+from .amica_ import mne_amica
 
 from ..cov import compute_whitener
 from .. import Covariance, Evoked
@@ -125,7 +125,7 @@ class ICA(ContainsMixin):
         np.random.RandomState to initialize the FastICA estimation.
         As the estimation is non-deterministic it can be useful to
         fix the seed to have reproducible results.
-    method : {'fastica', 'infomax', 'extended-infomax', ''}
+    method : {'fastica', 'infomax', 'extended-infomax', 'amica'}
         The ICA method to use. Defaults to 'fastica'.
     fit_params : dict | None.
         Additional parameters passed to the ICA estimator chosen by `method`.
@@ -177,7 +177,7 @@ class ICA(ContainsMixin):
                  n_pca_components=None, noise_cov=None, random_state=None,
                  method='fastica', fit_params=None, max_iter=200,
                  verbose=None):
-        methods = ('fastica', 'infomax', 'extended-infomax', '')
+        methods = ('fastica', 'infomax', 'extended-infomax', 'amica')
         if method not in methods:
             raise ValueError('`method` must be "%s". You passed: "%s"' %
                              ('" or "'.join(methods), method))
@@ -319,7 +319,7 @@ class ICA(ContainsMixin):
         if self.current_fit != 'unfitted':
             self._reset()
 
-        if self.method == "":
+        if self.method == "amica":
             self._fit(raw, self.max_pca_components, 'raw')
 
         else:
@@ -428,10 +428,8 @@ class ICA(ContainsMixin):
         
         if self.method == 'amica':
             self.unmixing_matrix_, S, A = mne_amica(data, **self.fit_params)
-            try:
-                self.n_components_ = self.fit_params["max_pca_components"]
-            except:
-                self.n_components = data.info["nchan"]
+            try: self.n_components = self.fit_params["pcakeep"]
+            except: self.n_components = data.info["nchan"]
 
         else:
             from sklearn.decomposition import RandomizedPCA
