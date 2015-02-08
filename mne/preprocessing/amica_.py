@@ -307,8 +307,8 @@ def mne_amica(data,
 
     paramfile = targetdir + 'paramfile'
 
-   print(data.shape[1])
-   print(data.shape[0])
+    print(data.shape[1])
+    print(data.shape[0])
 
     write_paramfile(outfile, targetdir, paramfile, max_iter=max_iter, chans = data.shape[1],
         length = data.shape[0],
