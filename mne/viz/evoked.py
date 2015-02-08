@@ -26,7 +26,7 @@ from ..io.pick import pick_info
 def _plot_evoked(evoked, picks, exclude, unit, show,
                  ylim, proj, xlim, hline, units,
                  scalings, titles, axes, plot_type,
-                 cmap=None):
+                 cmap=None, spatial_colors=False):
     """Aux function for plot_evoked and plot_evoked_image (cf. docstrings)
 
     Extra param is:
@@ -105,20 +105,27 @@ def _plot_evoked(evoked, picks, exclude, unit, show,
         if unit is False:
             this_scaling = 1.0
             ch_unit = 'NA'  # no unit
-        idx = [picks[i] for i in range(len(picks)) if types[i] == t]
+        idx = [picks[i] for i in range(len(picks))] # if types[i] == t]
         if len(idx) > 0:
             # Parameters for butterfly interactive plots
             if plot_type == 'butterfly':
-                if any([i in bad_ch_idx for i in idx]):
-                    colors = ['k'] * len(idx)
-                    for i in bad_ch_idx:
-                        if i in idx:
-                            colors[idx.index(i)] = 'r'
+                if not spatial_colors:
+                    if any([i in bad_ch_idx for i in idx]):
+                        colors = ['k'] * len(idx)
+                        for i in bad_ch_idx:
+                            if i in idx:
+                                colors[idx.index(i)] = 'r'
 
-                    ax._get_lines.color_cycle = iter(colors)
-                else:
-                    ax._get_lines.color_cycle = cycle(['k'])
-            # Set amplitude scaling
+                        ax._get_lines.color_cycle = iter(colors)
+                    else:
+                        ax._get_lines.color_cycle = cycle(['k'])
+                elif spatial_colors:
+                    chs = [evoked.info['chs'][i] for i in idx]
+                    chspace = np.asarray([list(chs[ch]['loc'][0:3]) 
+                                          for ch in range(len(chs))])
+                    chspace -= chspace.min()
+                    chspace /= chspace.max()/1
+                    ax._get_lines.color_cycle = iter(chspace)
             D = this_scaling * evoked.data[idx, :]
             # plt.axes(ax)
             if plot_type == 'butterfly':
@@ -175,7 +182,7 @@ def _plot_evoked(evoked, picks, exclude, unit, show,
 
 def plot_evoked(evoked, picks=None, exclude='bads', unit=True, show=True,
                 ylim=None, proj=False, xlim='tight', hline=None, units=None,
-                scalings=None, titles=None, axes=None):
+                scalings=None, titles=None, axes=None, spatial_colors=False):
     """Plot evoked data
 
     Note: If bad channels are not excluded they are shown in red.
@@ -222,7 +229,8 @@ def plot_evoked(evoked, picks=None, exclude='bads', unit=True, show=True,
     return _plot_evoked(evoked=evoked, picks=picks, exclude=exclude, unit=unit,
                         show=show, ylim=ylim, proj=proj, xlim=xlim,
                         hline=hline, units=units, scalings=scalings,
-                        titles=titles, axes=axes, plot_type="butterfly")
+                        titles=titles, axes=axes, plot_type="butterfly",
+                        spatial_colors=spatial_colors)
 
 
 def plot_evoked_image(evoked, picks=None, exclude='bads', unit=True, show=True,
