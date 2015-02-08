@@ -295,11 +295,11 @@ def mne_amica(data,
         pcakeep = n_chans
     else:
         pcakeep = max_pca_components
-    n_rank = np.linalg.matrix_rank(data)
-    if pcakeep > n_rank:
-       print('''Non-fatal warning: 
-    data is rank deficient (channel interpolated? reference included? comps removed?),
-    consider using doPCA = 1 and pcakeep < less than the number of chans''')
+#    n_rank = np.linalg.matrix_rank(data)
+#    if pcakeep > n_rank:
+#       print('''Non-fatal warning: 
+#    data is rank deficient (channel interpolated? reference included? comps removed?),
+#    consider using doPCA = 1 and pcakeep < less than the number of chans''')
 
     d = np.asarray(data)*1000000
     c = d.astype('<f32', copy=False).T
