@@ -19,13 +19,13 @@ def write_paramfile(raw_data_file,
                     minlrate = 1.000000e-08,
                     use_min_dll = 0,
                     numprocs = 1,
-                    max_pca_components = None,
+                    chans = None,
                     length = None):
 
     am_dict=OrderedDict()
 
     am_dict['files'] = raw_data_file
-    am_dict['data_dim'] = max_pca_components
+    am_dict['data_dim'] = chans
     am_dict['outdir'] = paramdir
     am_dict['field_dim'] = length
     am_dict['dble_data'] = dble_data
@@ -307,8 +307,8 @@ def mne_amica(data,
 
     paramfile = targetdir + 'paramfile'
 
-    write_paramfile(outfile, targetdir, paramfile, max_iter=max_iter, length = data[0].size,
-        max_pca_components = max_pca_components,
+    write_paramfile(outfile, targetdir, paramfile, max_iter=max_iter, length = data[1].shape,
+        chans = data.shape[0],
         max_threads = max_threads, numprocs = numprocs, doPCA=0, num_mix_comps = 1)
     call([amica_binary + ' ' + paramfile], shell=True)
     
