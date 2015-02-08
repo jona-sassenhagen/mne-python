@@ -103,7 +103,7 @@ def write_paramfile(raw_data_file,
     am_dict['invsigmin'] = '1.00000e-08' # 0
     am_dict['do_mean'] = 1
     am_dict['do_sphere'] = 1
-    am_dict['doPCA'] = doPCA
+    am_dict['doPCA'] = 0
     am_dict['pcadb'] = '30.000000'
     am_dict['doscaling'] = 1
     am_dict['scalestep'] = 1
@@ -310,8 +310,8 @@ def mne_amica(data,
    print(data.shape[1])
    print(data.shape[0])
 
-    write_paramfile(outfile, targetdir, paramfile, max_iter=max_iter, length = data.shape[1],
-        chans = data.shape[0],
+    write_paramfile(outfile, targetdir, paramfile, max_iter=max_iter, chans = data.shape[1],
+        length = data.shape[0],
         max_threads = max_threads, numprocs = numprocs, doPCA=0, num_mix_comps = 1)
     call([amica_binary + ' ' + paramfile], shell=True)
     
