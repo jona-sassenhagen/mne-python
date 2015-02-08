@@ -282,7 +282,7 @@ def loadmodout_convert(targetdir):
 def mne_amica(data,
               max_iter = 2000, 
                  doPCA = 1, 
-               pcakeep = None, 
+               pcakeep = max_pca_components, 
             filter_low = 1, 
            filter_high = 40,
            n_chans = None, # adapt this so only a selection of channels can be included?
