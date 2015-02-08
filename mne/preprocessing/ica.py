@@ -36,7 +36,7 @@ from ..io.base import _BaseRaw
 from ..epochs import _BaseEpochs
 from ..viz import (plot_ica_components, plot_ica_scores,
                    plot_ica_sources, plot_ica_overlay)
-from ..channels.channels import _contains_ch_type, ContainsMixin
+from ..channels import _contains_ch_type, ContainsMixin
 from ..io.write import start_file, end_file, write_id
 from ..utils import (check_sklearn_version, logger, check_fname, verbose,
                      _reject_data_segments)
@@ -428,68 +428,75 @@ class ICA(ContainsMixin):
 
     def _fit(self, data, max_pca_components, fit_type):
         """Aux function """
-        from sklearn.decomposition import RandomizedPCA
+        
+        if self.method == 'amica':
+            self.unmixing_matrix_, S, A = mne_amica(inst, **self.fit_params)
 
-        # XXX fix copy==True later. Bug in sklearn, see PR #2273
-        pca = RandomizedPCA(n_components=max_pca_components, whiten=True,
-                            copy=True, random_state=self.random_state)
-
-        if isinstance(self.n_components, float):
-            # compute full feature variance before doing PCA
-            full_var = np.var(data, axis=1).sum()
-
-        data = pca.fit_transform(data.T)
-
-        if isinstance(self.n_components, float):
-            # compute eplained variance manually, cf. sklearn bug
-            # fixed in #2664
-            explained_variance_ratio_ = pca.explained_variance_ / full_var
-            n_components_ = np.sum(explained_variance_ratio_.cumsum()
-                                   <= self.n_components)
-            if n_components_ < 1:
-                raise RuntimeError('One PCA component captures most of the '
-                                   'explained variance, your threshold resu'
-                                   'lts in 0 components. You should select '
-                                   'a higher value.')
-            logger.info('Selection by explained variance: %i components' %
-                        n_components_)
-            sel = slice(n_components_)
         else:
-            logger.info('Selection by number: %i components' %
-                        self.n_components)
-            if self.n_components is not None:  # normal n case
-                sel = slice(self.n_components)
-            else:  # None case
-                logger.info('Using all PCA components: %i' % pca.components_)
-                sel = slice(len(pca.components_))
+            from sklearn.decomposition import RandomizedPCA
 
-        # the things to store for PCA
-        self.pca_mean_ = pca.mean_
-        self.pca_components_ = pca.components_
-        # unwhiten pca components and put scaling in unmixintg matrix later.
-        self.pca_explained_variance_ = exp_var = pca.explained_variance_
-        self.pca_components_ *= np.sqrt(exp_var[:, None])
-        del pca
-        # update number of components
-        self.n_components_ = sel.stop
-        if self.n_pca_components is not None:
-            if self.n_pca_components > len(self.pca_components_):
-                self.n_pca_components = len(self.pca_components_)
+            # XXX fix copy==True later. Bug in sklearn, see PR #2273
+            pca = RandomizedPCA(n_components=max_pca_components, whiten=True,
+                                copy=True, random_state=self.random_state)
 
-        # Take care of ICA
-        if self.method == 'fastica':
-            from sklearn.decomposition import FastICA  # to avoid strong dep.
-            ica = FastICA(whiten=False,
-                          random_state=self.random_state, **self.fit_params)
-            ica.fit(data[:, sel])
-            # get unmixing and add scaling
-            self.unmixing_matrix_ = getattr(ica, 'components_',
-                                            'unmixing_matrix_')
-        elif self.method in ('infomax', 'extended-infomax'):
-            self.unmixing_matrix_ = infomax(data[:, sel], **self.fit_params)
+            if isinstance(self.n_components, float):
+                # compute full feature variance before doing PCA
+                full_var = np.var(data, axis=1).sum()
+
+            data = pca.fit_transform(data.T)
+
+            if isinstance(self.n_components, float):
+                # compute eplained variance manually, cf. sklearn bug
+                # fixed in #2664
+                explained_variance_ratio_ = pca.explained_variance_ / full_var
+                n_components_ = np.sum(explained_variance_ratio_.cumsum()
+                                       <= self.n_components)
+                if n_components_ < 1:
+                    raise RuntimeError('One PCA component captures most of the '
+                                       'explained variance, your threshold resu'
+                                       'lts in 0 components. You should select '
+                                       'a higher value.')
+                logger.info('Selection by explained variance: %i components' %
+                            n_components_)
+                sel = slice(n_components_)
+            else:
+                logger.info('Selection by number: %i components' %
+                            self.n_components)
+                if self.n_components is not None:  # normal n case
+                    sel = slice(self.n_components)
+                else:  # None case
+                    logger.info('Using all PCA components: %i' 
+                                              % pca.components_)
+                    sel = slice(len(pca.components_))
+
+            # the things to store for PCA
+            self.pca_mean_ = pca.mean_
+            self.pca_components_ = pca.components_
+            # unwhiten pca components and put scaling in unmixintg matrix later.
+            self.pca_explained_variance_ = exp_var = pca.explained_variance_
+            self.pca_components_ *= np.sqrt(exp_var[:, None])
+            del pca
+            # update number of components
+            self.n_components_ = sel.stop
+            if self.n_pca_components is not None:
+                if self.n_pca_components > len(self.pca_components_):
+                    self.n_pca_components = len(self.pca_components_)
+
+            # Take care of ICA
+            if self.method == 'fastica':
+                from sklearn.decomposition import FastICA  # to avoid strong dep.
+                ica = FastICA(whiten=False,
+                              random_state=self.random_state, **self.fit_params)
+                ica.fit(data[:, sel])
+                # get unmixing and add scaling
+                self.unmixing_matrix_ = getattr(ica, 'components_',
+                                                'unmixing_matrix_')
+            elif self.method in ('infomax', 'extended-infomax'):
+                self.unmixing_matrix_ = infomax(data[:, sel], **self.fit_params)
         self.unmixing_matrix_ /= np.sqrt(exp_var[sel])[None, :]
         self.mixing_matrix_ = linalg.pinv(self.unmixing_matrix_)
         self.current_fit = fit_type
+
 
     def _transform(self, data):
         """Compute sources from data (operates inplace)"""
@@ -923,7 +930,7 @@ class ICA(ContainsMixin):
         """Detect EOG related components using correlation
 
         Detection is based on Pearson correlation between the
-        filtered data and the filtered EOG channel.
+        filtered data and the filtered ECG channel.
         Thresholding is based on adaptive z-scoring. The above threshold
         components will be masked and the z-score will be recomputed
         until no supra-threshold component remains.
@@ -933,7 +940,7 @@ class ICA(ContainsMixin):
         inst : instance of Raw, Epochs or Evoked
             Object to compute sources from.
         ch_name : str
-            The name of the channel to use for EOG peak detection.
+            The name of the channel to use for ECG peak detection.
             The argument is mandatory if the dataset contains no ECG
             channels.
         threshold : int | float
@@ -1237,7 +1244,7 @@ class ICA(ContainsMixin):
                         vmin=None, vmax=None, cmap='RdBu_r', sensors=True,
                         colorbar=False, title=None, show=True, outlines='head',
                         contours=6, image_interp='bilinear'):
-        """Project unmixing matrix on interpolated sensor topography.
+        """Project unmixing matrix on interpolated sensor topogrpahy.
 
         Parameters
         ----------
@@ -1367,11 +1374,11 @@ class ICA(ContainsMixin):
             The figure object.
         """
         return plot_ica_scores(ica=self, scores=scores, exclude=exclude,
-                               axhline=axhline, title=title,
-                               figsize=figsize, show=show)
+                               axhline=axhline, title=title, figsize=figsize,
+                               show=show)
 
-    def plot_overlay(self, inst, exclude=None, picks=None, start=None,
-                     stop=None, title=None, show=True):
+    def plot_overlay(self, inst, exclude=None, start=None, stop=None,
+                     title=None, show=True):
         """Overlay of raw and cleaned signals given the unmixing matrix.
 
         This method helps visualizing signal quality and arficat rejection.
@@ -1405,8 +1412,8 @@ class ICA(ContainsMixin):
         fig : instance of pyplot.Figure
             The figure.
         """
-        return plot_ica_overlay(self, inst=inst, exclude=exclude, picks=picks,
-                                start=start, stop=stop, title=title, show=show)
+        return plot_ica_overlay(self, inst=inst, exclude=exclude, start=start,
+                                stop=stop, title=title, show=show)
 
     def detect_artifacts(self, raw, start_find=None, stop_find=None,
                          ecg_ch=None, ecg_score_func='pearsonr',
@@ -1437,8 +1444,6 @@ class ICA(ContainsMixin):
 
         Parameters
         ----------
-        raw : instance of Raw
-            Raw object to draw sources from.
         start_find : int | float | None
             First sample to include for artifact search. If float, data will be
             interpreted as time in seconds. If None, data will be used from the
@@ -1609,10 +1614,10 @@ def ica_find_eog_events(raw, eog_source=None, event_id=998, l_freq=1,
         ICA source resembling EOG to find peaks from.
     event_id : int
         The index to assign to found events.
-    l_freq : float
-        Low cut-off frequency in Hz.
-    h_freq : float
-        High cut-off frequency in Hz.
+    low_pass : float
+        Low pass frequency.
+    high_pass : float
+        High pass frequency.
     verbose : bool, str, int, or None
         If not None, override default verbose level (see mne.verbose).
 
@@ -1910,11 +1915,11 @@ def _detect_artifacts(ica, raw, start_find, stop_find, ecg_ch, ecg_score_func,
 @verbose
 def run_ica(raw, n_components, max_pca_components=100,
             n_pca_components=64, noise_cov=None, random_state=None,
-            picks=None, start=None, stop=None, start_find=None,
+            verbose=None, picks=None, start=None, stop=None, start_find=None,
             stop_find=None, ecg_ch=None, ecg_score_func='pearsonr',
             ecg_criterion=0.1, eog_ch=None, eog_score_func='pearsonr',
             eog_criterion=0.1, skew_criterion=-1, kurt_criterion=-1,
-            var_criterion=0, add_nodes=None, verbose=None):
+            var_criterion=0, add_nodes=None):
     """Run ICA decomposition on raw data and identify artifact sources
 
     This function implements an automated artifact removal work flow.
@@ -1962,6 +1967,17 @@ def run_ica(raw, n_components, max_pca_components=100,
         np.random.RandomState to initialize the FastICA estimation.
         As the estimation is non-deterministic it can be useful to
         fix the seed to have reproducible results.
+    algorithm : {'parallel', 'deflation'}
+        Apply parallel or deflational algorithm for FastICA
+    fun : string or function, optional. Default: 'logcosh'
+        The functional form of the G function used in the
+        approximation to neg-entropy. Could be either 'logcosh', 'exp',
+        or 'cube'.
+        You can also provide your own function. It should return a tuple
+        containing the value of the function, and of its derivative, in the
+        point.
+    verbose : bool, str, int, or None
+        If not None, override default verbose level (see mne.verbose).
     picks : array-like of int
         Channels to be included. This selection remains throughout the
         initialized ICA solution. If None only good data channels are used.
@@ -2033,8 +2049,6 @@ def run_ica(raw, n_components, max_pca_components=100,
         generalization of the artifact specific parameters above and has
         the same structure. Example:
         add_nodes=('ECG phase lock', ECG 01', my_phase_lock_function, 0.5)
-    verbose : bool, str, int, or None
-        If not None, override default verbose level (see mne.verbose).
 
     Returns
     -------
