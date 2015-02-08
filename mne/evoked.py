@@ -339,7 +339,7 @@ class Evoked(ProjMixin, ContainsMixin, PickDropChannelsMixin,
 
     def plot(self, picks=None, exclude='bads', unit=True, show=True, ylim=None,
              proj=False, xlim='tight', hline=None, units=None, scalings=None,
-             titles=None, axes=None):
+             titles=None, axes=None, spatial_colors=None):
         """Plot evoked data as butterfly plots
 
         Note: If bad channels are not excluded they are shown in red.
@@ -383,7 +383,7 @@ class Evoked(ProjMixin, ContainsMixin, PickDropChannelsMixin,
         return plot_evoked(self, picks=picks, exclude=exclude, unit=unit,
                            show=show, ylim=ylim, proj=proj, xlim=xlim,
                            hline=hline, units=units, scalings=scalings,
-                           titles=titles, axes=axes)
+                           titles=titles, axes=axes, spatial_colors=spatial_colors)
 
     def plot_image(self, picks=None, exclude='bads', unit=True, show=True,
                    clim=None, proj=False, xlim='tight', units=None,
@@ -874,9 +874,8 @@ class EvokedArray(Evoked):
                              'n_samples)')
 
         if len(info['ch_names']) != np.shape(data)[0]:
-            raise ValueError('Info (%s) and data (%s) must have same number '
-                             'of channels.' % (len(info['ch_names']),
-                                               np.shape(data)[0]))
+            raise ValueError('Info and data must have same number of '
+                             'channels.')
 
         self.data = data
 
