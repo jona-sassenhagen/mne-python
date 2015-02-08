@@ -428,8 +428,8 @@ class ICA(ContainsMixin):
         
         if self.method == 'amica':
             self.unmixing_matrix_, S, A = mne_amica(data, **self.fit_params)
-            try: self.n_components = self.fit_params["pcakeep"]
-            except: self.n_components = data.info["nchan"]
+            try: self.n_components_ = self.fit_params["pcakeep"]
+            except: self.n_components_ = data.info["nchan"]
 
         else:
             from sklearn.decomposition import RandomizedPCA
