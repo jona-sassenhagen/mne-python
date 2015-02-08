@@ -319,42 +319,42 @@ class ICA(ContainsMixin):
         if self.current_fit != 'unfitted':
             self._reset()
 
-		if self.method == "amica":
-		    self._fit(raw, self.max_pca_components, 'raw')
+        if self.method == "amica":
+            self._fit(raw, self.max_pca_components, 'raw')
 
-		else:
-			if picks is None:  # just use good data channels
-				picks = pick_types(raw.info, meg=True, eeg=True, eog=False,
-								   ecg=False, misc=False, stim=False,
-								   ref_meg=False, exclude='bads')
-			logger.info('Fitting ICA to data using %i channels. \n'
-						'Please be patient, this may take some time' % len(picks))
+        else:
+            if picks is None:  # just use good data channels
+                picks = pick_types(raw.info, meg=True, eeg=True, eog=False,
+                                   ecg=False, misc=False, stim=False,
+                                   ref_meg=False, exclude='bads')
+            logger.info('Fitting ICA to data using %i channels. \n'
+                        'Please be patient, this may take some time' % len(picks))
 
-			if self.max_pca_components is None:
-				self.max_pca_components = len(picks)
-				logger.info('Inferring max_pca_components from picks.')
+            if self.max_pca_components is None:
+                self.max_pca_components = len(picks)
+                logger.info('Inferring max_pca_components from picks.')
 
-			self.info = pick_info(raw.info, picks)
-			if self.info['comps']:
-				self.info['comps'] = []
-			self.ch_names = self.info['ch_names']
-			start, stop = _check_start_stop(raw, start, stop)
+            self.info = pick_info(raw.info, picks)
+            if self.info['comps']:
+                self.info['comps'] = []
+            self.ch_names = self.info['ch_names']
+            start, stop = _check_start_stop(raw, start, stop)
 
-			data = raw[picks, start:stop][0]
-			if decim is not None:
-				data = data[:, ::decim].copy()
+            data = raw[picks, start:stop][0]
+            if decim is not None:
+                data = data[:, ::decim].copy()
 
-			if (reject is not None) or (flat is not None):
-				data, self.drop_inds_ = _reject_data_segments(data, reject, flat,
-															  decim, self.info,
-															  tstep)
+            if (reject is not None) or (flat is not None):
+                data, self.drop_inds_ = _reject_data_segments(data, reject, flat,
+                                                              decim, self.info,
+                                                              tstep)
 
-			self.n_samples_ = data.shape[1]
+            self.n_samples_ = data.shape[1]
 
-			data, self._pre_whitener = self._pre_whiten(data,
-														raw.info, picks)
+            data, self._pre_whitener = self._pre_whiten(data,
+                                                        raw.info, picks)
 
-			self._fit(data, self.max_pca_components, 'raw')
+            self._fit(data, self.max_pca_components, 'raw')
 
         return self
 
