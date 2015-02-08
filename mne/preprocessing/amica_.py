@@ -312,8 +312,8 @@ def mne_amica(data,
         max_threads = max_threads, numprocs = numprocs, doPCA=0, num_mix_comps = 1)
     call([amica_binary + ' ' + paramfile], shell=True)
     
-    targetdir2 = '/home/FB/fb05/sassenha/amicaouttmp/'
-    W, A, S = loadmodout_convert(targetdir2)
+#    targetdir = '/home/FB/fb05/sassenha/amicaouttmp/'
+    W, A, S = loadmodout_convert(targetdir)
     
     # W: unmixing weights (post-sphering)
     # S: sphering matrix
