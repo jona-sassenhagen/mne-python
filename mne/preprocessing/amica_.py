@@ -20,7 +20,7 @@ def write_paramfile(raw_data_file,
                     use_min_dll = 0,
                     numprocs = 1,
                     max_pca_components = None,
-                    length = length):
+                    length = None):
 
     am_dict=OrderedDict()
 
