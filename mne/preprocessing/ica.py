@@ -319,38 +319,38 @@ class ICA(ContainsMixin):
         if self.current_fit != 'unfitted':
             self._reset()
 
-		if picks is None:  # just use good data channels
-			picks = pick_types(raw.info, meg=True, eeg=True, eog=False,
-							   ecg=False, misc=False, stim=False,
-							   ref_meg=False, exclude='bads')
-		logger.info('Fitting ICA to data using %i channels. \n'
-					'Please be patient, this may take some time' % len(picks))
+        if picks is None:  # just use good data channels
+            picks = pick_types(raw.info, meg=True, eeg=True, eog=False,
+                               ecg=False, misc=False, stim=False,
+                               ref_meg=False, exclude='bads')
+        logger.info('Fitting ICA to data using %i channels. \n'
+                    'Please be patient, this may take some time' % len(picks))
 
-		if self.max_pca_components is None:
-			self.max_pca_components = len(picks)
-			logger.info('Inferring max_pca_components from picks.')
+        if self.max_pca_components is None:
+            self.max_pca_components = len(picks)
+            logger.info('Inferring max_pca_components from picks.')
 
-		self.info = pick_info(raw.info, picks)
-		if self.info['comps']:
-			self.info['comps'] = []
-		self.ch_names = self.info['ch_names']
-		start, stop = _check_start_stop(raw, start, stop)
+        self.info = pick_info(raw.info, picks)
+        if self.info['comps']:
+            self.info['comps'] = []
+        self.ch_names = self.info['ch_names']
+        start, stop = _check_start_stop(raw, start, stop)
 
-		data = raw[picks, start:stop][0]
-		if decim is not None:
-			data = data[:, ::decim].copy()
+        data = raw[picks, start:stop][0]
+        if decim is not None:
+            data = data[:, ::decim].copy()
 
-		if (reject is not None) or (flat is not None):
-			data, self.drop_inds_ = _reject_data_segments(data, reject, flat,
-														  decim, self.info,
-														  tstep)
+        if (reject is not None) or (flat is not None):
+            data, self.drop_inds_ = _reject_data_segments(data, reject, flat,
+                                                          decim, self.info,
+                                                          tstep)
 
-		self.n_samples_ = data.shape[1]
+        self.n_samples_ = data.shape[1]
 
-		data, self._pre_whitener = self._pre_whiten(data,
-													raw.info, picks)
+        data, self._pre_whitener = self._pre_whiten(data,
+                                                    raw.info, picks)
 
-		self._fit(data, self.max_pca_components, 'raw')
+        self._fit(data, self.max_pca_components, 'raw')
 
         return self
 
@@ -422,69 +422,69 @@ class ICA(ContainsMixin):
     def _fit(self, data, max_pca_components, fit_type):
         """Aux function """
         
-		from sklearn.decomposition import RandomizedPCA
+        from sklearn.decomposition import RandomizedPCA
 
-		# XXX fix copy==True later. Bug in sklearn, see PR #2273
-		pca = RandomizedPCA(n_components=max_pca_components, whiten=True,
-							copy=True, random_state=self.random_state)
+        # XXX fix copy==True later. Bug in sklearn, see PR #2273
+        pca = RandomizedPCA(n_components=max_pca_components, whiten=True,
+                            copy=True, random_state=self.random_state)
 
-		if isinstance(self.n_components, float):
-			# compute full feature variance before doing PCA
-			full_var = np.var(data, axis=1).sum()
+        if isinstance(self.n_components, float):
+            # compute full feature variance before doing PCA
+            full_var = np.var(data, axis=1).sum()
 
-		data = pca.fit_transform(data.T)
+        data = pca.fit_transform(data.T)
 
-		if isinstance(self.n_components, float):
-			# compute eplained variance manually, cf. sklearn bug
-			# fixed in #2664
-			explained_variance_ratio_ = pca.explained_variance_ / full_var
-			n_components_ = np.sum(explained_variance_ratio_.cumsum()
-								   <= self.n_components)
-			if n_components_ < 1:
-				raise RuntimeError('One PCA component captures most of the '
-								   'explained variance, your threshold resu'
-								   'lts in 0 components. You should select '
-								   'a higher value.')
-			logger.info('Selection by explained variance: %i components' %
-						n_components_)
-			sel = slice(n_components_)
-		else:
-			logger.info('Selection by number: %i components' %
-						self.n_components)
-			if self.n_components is not None:  # normal n case
-				sel = slice(self.n_components)
-			else:  # None case
-				logger.info('Using all PCA components: %i' 
-										  % pca.components_)
-				sel = slice(len(pca.components_))
+        if isinstance(self.n_components, float):
+            # compute eplained variance manually, cf. sklearn bug
+            # fixed in #2664
+            explained_variance_ratio_ = pca.explained_variance_ / full_var
+            n_components_ = np.sum(explained_variance_ratio_.cumsum()
+                                   <= self.n_components)
+            if n_components_ < 1:
+                raise RuntimeError('One PCA component captures most of the '
+                                   'explained variance, your threshold resu'
+                                   'lts in 0 components. You should select '
+                                   'a higher value.')
+            logger.info('Selection by explained variance: %i components' %
+                        n_components_)
+            sel = slice(n_components_)
+        else:
+            logger.info('Selection by number: %i components' %
+                        self.n_components)
+            if self.n_components is not None:  # normal n case
+                sel = slice(self.n_components)
+            else:  # None case
+                logger.info('Using all PCA components: %i' 
+                                          % pca.components_)
+                sel = slice(len(pca.components_))
 
-		# the things to store for PCA
-		self.pca_mean_ = pca.mean_
-		self.pca_components_ = pca.components_
-		# unwhiten pca components and put scaling in unmixintg matrix later.
-		self.pca_explained_variance_ = exp_var = pca.explained_variance_
-		self.pca_components_ *= np.sqrt(exp_var[:, None])
-		del pca
-		# update number of components
-		self.n_components_ = sel.stop
-		if self.n_pca_components is not None:
-			if self.n_pca_components > len(self.pca_components_):
-				self.n_pca_components = len(self.pca_components_)
+        # the things to store for PCA
+        self.pca_mean_ = pca.mean_
+        self.pca_components_ = pca.components_
+        # unwhiten pca components and put scaling in unmixintg matrix later.
+        self.pca_explained_variance_ = exp_var = pca.explained_variance_
+        self.pca_components_ *= np.sqrt(exp_var[:, None])
+        del pca
+        # update number of components
+        self.n_components_ = sel.stop
+        if self.n_pca_components is not None:
+            if self.n_pca_components > len(self.pca_components_):
+                self.n_pca_components = len(self.pca_components_)
 
-		# Take care of ICA
-		if self.method == 'fastica':
-			from sklearn.decomposition import FastICA  # to avoid strong dep.
-			ica = FastICA(whiten=False,
-						  random_state=self.random_state, **self.fit_params)
-			ica.fit(data[:, sel])
-			# get unmixing and add scaling
-			self.unmixing_matrix_ = getattr(ica, 'components_',
-											'unmixing_matrix_')
-		elif self.method in ('infomax', 'extended-infomax'):
-			self.unmixing_matrix_ = infomax(data[:, sel], **self.fit_params)
-		elif self.method == 'amica':
+        # Take care of ICA
+        if self.method == 'fastica':
+            from sklearn.decomposition import FastICA  # to avoid strong dep.
+            ica = FastICA(whiten=False,
+                          random_state=self.random_state, **self.fit_params)
+            ica.fit(data[:, sel])
+            # get unmixing and add scaling
+            self.unmixing_matrix_ = getattr(ica, 'components_',
+                                            'unmixing_matrix_')
+        elif self.method in ('infomax', 'extended-infomax'):
+            self.unmixing_matrix_ = infomax(data[:, sel], **self.fit_params)
+        elif self.method == 'amica':
             self.unmixing_matrix_, S, A = mne_amica(data[:, sel], **self.fit_params)
-		self.unmixing_matrix_ /= np.sqrt(exp_var[sel])[None, :]
+        self.unmixing_matrix_ /= np.sqrt(exp_var[sel])[None, :]
 
         self.mixing_matrix_ = linalg.pinv(self.unmixing_matrix_)
         self.current_fit = fit_type
