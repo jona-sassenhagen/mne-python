@@ -19,12 +19,12 @@ def write_paramfile(raw_data_file,
                     minlrate = 1.000000e-08,
                     use_min_dll = 0,
                     numprocs = 1,
-                    max_pca_components = max_pca_components):
+                    max_pca_components = None):
 
     am_dict=OrderedDict()
 
     am_dict['files'] = raw_data_file
-    am_dict['data_dim'] = n_chan
+    am_dict['data_dim'] = max_pca_components
     am_dict['outdir'] = paramdir
     am_dict['field_dim'] = data[0].size
     am_dict['dble_data'] = dble_data
