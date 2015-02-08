@@ -480,11 +480,12 @@ class ICA(ContainsMixin):
             # get unmixing and add scaling
             self.unmixing_matrix_ = getattr(ica, 'components_',
                                             'unmixing_matrix_')
+            self.unmixing_matrix_ /= np.sqrt(exp_var[sel])[None, :]
         elif self.method in ('infomax', 'extended-infomax'):
             self.unmixing_matrix_ = infomax(data[:, sel], **self.fit_params)
+            self.unmixing_matrix_ /= np.sqrt(exp_var[sel])[None, :]
         elif self.method == 'amica':
             self.unmixing_matrix_, S, A = mne_amica(data[:, sel], **self.fit_params)
-        self.unmixing_matrix_ /= np.sqrt(exp_var[sel])[None, :]
 
         self.mixing_matrix_ = linalg.pinv(self.unmixing_matrix_)
         self.current_fit = fit_type
