@@ -318,7 +318,7 @@ def mne_amica(data,
 
     paramfile = targetdir + 'paramfile'
 
-    write_paramfile(raw, outfile, targetdir, paramfile, max_iter=max_iter, 
+    write_paramfile(data, outfile, targetdir, paramfile, max_iter=max_iter, 
         max_threads = max_threads, numprocs = numprocs, doPCA=1, pcakeep = pcakeep, num_mix_comps = 1)
     call([amica_binary + ' ' + paramfile], shell=True)
     
