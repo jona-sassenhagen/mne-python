@@ -20,6 +20,7 @@ from .ecg import (qrs_detector, _get_ecg_channel_index, _make_ecg,
                   create_ecg_epochs)
 from .eog import _find_eog_events, _get_eog_channel_index
 from .infomax_ import infomax
+from .amica_ import mne_amica
 
 from ..cov import compute_whitener
 from .. import Covariance, Evoked
@@ -85,20 +86,16 @@ __all__ = ['ICA', 'ica_find_ecg_events', 'ica_find_eog_events', 'score_funcs',
 class ICA(ContainsMixin):
 
     """M/EEG signal decomposition using Independent Component Analysis (ICA)
-
     This object can be used to estimate ICA components and then
     remove some from Raw or Epochs for data exploration or artifact
     correction.
-
     Caveat! If supplying a noise covariance keep track of the projections
     available in the cov or in the raw object. For example, if you are
     interested in EOG or ECG artifacts, EOG and ECG projections should be
     temporally removed before fitting the ICA. You can say::
-
         >> projs, raw.info['projs'] = raw.info['projs'], []
         >> ica.fit(raw)
         >> raw.info['projs'] = projs
-
     Parameters
     ----------
     n_components : int | float | None
@@ -128,7 +125,7 @@ class ICA(ContainsMixin):
         np.random.RandomState to initialize the FastICA estimation.
         As the estimation is non-deterministic it can be useful to
         fix the seed to have reproducible results.
-    method : {'fastica', 'infomax', 'extended-infomax'}
+    method : {'fastica', 'infomax', 'extended-infomax', 'amica'}
         The ICA method to use. Defaults to 'fastica'.
     fit_params : dict | None.
         Additional parameters passed to the ICA estimator chosen by `method`.
@@ -136,7 +133,6 @@ class ICA(ContainsMixin):
         Maximum number of iterations during fit.
     verbose : bool, str, int, or None
         If not None, override default verbose level (see mne.verbose).
-
     Attributes
     ----------
     current_fit : str
@@ -181,7 +177,7 @@ class ICA(ContainsMixin):
                  n_pca_components=None, noise_cov=None, random_state=None,
                  method='fastica', fit_params=None, max_iter=200,
                  verbose=None):
-        methods = ('fastica', 'infomax', 'extended-infomax')
+        methods = ('fastica', 'infomax', 'extended-infomax', 'amica')
         if method not in methods:
             raise ValueError('`method` must be "%s". You passed: "%s"' %
                              ('" or "'.join(methods), method))
@@ -255,12 +251,10 @@ class ICA(ContainsMixin):
     def fit(self, inst, picks=None, start=None, stop=None, decim=None,
             reject=None, flat=None, tstep=2.0, verbose=None):
         """Run the ICA decomposition on raw data
-
         Caveat! If supplying a noise covariance keep track of the projections
         available in the cov, the raw or the epochs object. For example,
         if you are interested in EOG or ECG artifacts, EOG and ECG projections
         should be temporally removed before fitting the ICA.
-
         Parameters
         ----------
         inst : instance of Raw, Epochs or Evoked
@@ -294,7 +288,6 @@ class ICA(ContainsMixin):
         verbose : bool, str, int, or None
             If not None, override default verbose level (see mne.verbose).
             Defaults to self.verbose.
-
         Returns
         -------
         self : instance of ICA
@@ -497,7 +490,6 @@ class ICA(ContainsMixin):
         self.mixing_matrix_ = linalg.pinv(self.unmixing_matrix_)
         self.current_fit = fit_type
 
-
     def _transform(self, data):
         """Compute sources from data (operates inplace)"""
         if self.pca_mean_ is not None:
@@ -575,14 +567,11 @@ class ICA(ContainsMixin):
 
     def get_sources(self, inst, add_channels=None, start=None, stop=None):
         """Estimate sources given the unmixing matrix
-
         This method will return the sources in the container format passed.
         Typical usecases:
-
         1. pass Raw object to use `raw.plot` for ICA sources
         2. pass Epochs object to compute trial-based statistics in ICA space
         3. pass Evoked object to investigate time-locking in ICA space
-
         Parameters
         ----------
         inst : instance of Raw, Epochs or Evoked
@@ -596,7 +585,6 @@ class ICA(ContainsMixin):
         stop : int | float | None
             Last sample to not include. If float, data will be interpreted as
             time in seconds. If None, the entire data will be used.
-
         Returns
         -------
         sources : instance of Raw, Epochs or Evoked
@@ -723,7 +711,6 @@ class ICA(ContainsMixin):
                       start=None, stop=None, l_freq=None, h_freq=None,
                       verbose=None):
         """Assign score to components based on statistic or metric
-
         Parameters
         ----------
         inst : instance of Raw, Epochs or Evoked
@@ -756,7 +743,6 @@ class ICA(ContainsMixin):
         verbose : bool, str, int, or None
             If not None, override default verbose level (see mne.verbose).
             Defaults to self.verbose.
-
         Returns
         -------
         scores : ndarray
@@ -820,10 +806,8 @@ class ICA(ContainsMixin):
                       start=None, stop=None, l_freq=8, h_freq=16,
                       method='ctps', verbose=None):
         """Detect ECG related components using correlation
-
         Note. If no ECG channel is available, routine attempts to create
         an artificial ECG based on cross-channel averaging.
-
         Parameters
         ----------
         inst : instance of Raw, Epochs or Evoked
@@ -859,14 +843,12 @@ class ICA(ContainsMixin):
         verbose : bool, str, int, or None
             If not None, override default verbose level (see mne.verbose).
             Defaults to self.verbose.
-
         Returns
         -------
         ecg_idx : list of int
             The indices of EOG related components.
         scores : np.ndarray of float, shape (ica.n_components_)
             The correlation scores.
-
         References
         ----------
         [1] Dammers, J., Schiek, M., Boers, F., Silex, C., Zvyagintsev,
@@ -928,19 +910,17 @@ class ICA(ContainsMixin):
                       start=None, stop=None, l_freq=1, h_freq=10,
                       verbose=None):
         """Detect EOG related components using correlation
-
         Detection is based on Pearson correlation between the
-        filtered data and the filtered ECG channel.
+        filtered data and the filtered EOG channel.
         Thresholding is based on adaptive z-scoring. The above threshold
         components will be masked and the z-score will be recomputed
         until no supra-threshold component remains.
-
         Parameters
         ----------
         inst : instance of Raw, Epochs or Evoked
             Object to compute sources from.
         ch_name : str
-            The name of the channel to use for ECG peak detection.
+            The name of the channel to use for EOG peak detection.
             The argument is mandatory if the dataset contains no ECG
             channels.
         threshold : int | float
@@ -958,7 +938,6 @@ class ICA(ContainsMixin):
         verbose : bool, str, int, or None
             If not None, override default verbose level (see mne.verbose).
             Defaults to self.verbose.
-
         Returns
         -------
         ecg_idx : list of int
@@ -1012,12 +991,10 @@ class ICA(ContainsMixin):
               n_pca_components=None, start=None, stop=None,
               copy=False):
         """Remove selected components from the signal.
-
         Given the unmixing matrix, transform data,
         zero out components, and inverse transform the data.
         This procedure will reconstruct M/EEG signals from which
         the dynamics described by the excluded components is subtracted.
-
         Parameters
         ----------
         inst : instance of Raw, Epochs or Evoked
@@ -1216,7 +1193,6 @@ class ICA(ContainsMixin):
     @verbose
     def save(self, fname):
         """Store ICA solution into a fiff file.
-
         Parameters
         ----------
         fname : str
@@ -1244,8 +1220,7 @@ class ICA(ContainsMixin):
                         vmin=None, vmax=None, cmap='RdBu_r', sensors=True,
                         colorbar=False, title=None, show=True, outlines='head',
                         contours=6, image_interp='bilinear'):
-        """Project unmixing matrix on interpolated sensor topogrpahy.
-
+        """Project unmixing matrix on interpolated sensor topography.
         Parameters
         ----------
         picks : int | array-like | None
@@ -1290,7 +1265,6 @@ class ICA(ContainsMixin):
         image_interp : str
             The image interpolation to be used. All matplotlib options are
             accepted.
-
         Returns
         -------
         fig : instance of matplotlib.pyplot.Figure
@@ -1308,14 +1282,10 @@ class ICA(ContainsMixin):
     def plot_sources(self, inst, picks=None, exclude=None, start=None,
                      stop=None, title=None, show=True):
         """Plot estimated latent sources given the unmixing matrix.
-
         Typical usecases:
-
         1. plot evolution of latent sources over time based on (Raw input)
         2. plot latent source around event related time windows (Epochs input)
         3. plot time-locking in ICA space (Evoked input)
-
-
         Parameters
         ----------
         inst : instance of mne.io.Raw, mne.Epochs, mne.Evoked
@@ -1334,7 +1304,6 @@ class ICA(ContainsMixin):
             The figure title. If None a default is provided.
         show : bool
             If True, all open plots will be shown.
-
         Returns
         -------
         fig : instance of pyplot.Figure
@@ -1348,10 +1317,8 @@ class ICA(ContainsMixin):
                     title='ICA component scores', figsize=(12, 6),
                     show=True):
         """Plot scores related to detected components.
-
         Use this function to asses how well your score describes outlier
         sources and how well you were detecting them.
-
         Parameters
         ----------
         scores : array_like of float, shape (n ica components,) | list of array
@@ -1367,22 +1334,19 @@ class ICA(ContainsMixin):
             The figure size. Defaults to (12, 6).
         show : bool
             If True, all open plots will be shown.
-
         Returns
         -------
         fig : instance of matplotlib.pyplot.Figure
             The figure object.
         """
         return plot_ica_scores(ica=self, scores=scores, exclude=exclude,
-                               axhline=axhline, title=title, figsize=figsize,
-                               show=show)
+                               axhline=axhline, title=title,
+                               figsize=figsize, show=show)
 
-    def plot_overlay(self, inst, exclude=None, start=None, stop=None,
-                     title=None, show=True):
+    def plot_overlay(self, inst, exclude=None, picks=None, start=None,
+                     stop=None, title=None, show=True):
         """Overlay of raw and cleaned signals given the unmixing matrix.
-
         This method helps visualizing signal quality and arficat rejection.
-
         Parameters
         ----------
         inst : instance of mne.io.Raw or mne.Evoked
@@ -1406,14 +1370,13 @@ class ICA(ContainsMixin):
             The figure title.
         show : bool
             If True, all open plots will be shown.
-
         Returns
         -------
         fig : instance of pyplot.Figure
             The figure.
         """
-        return plot_ica_overlay(self, inst=inst, exclude=exclude, start=start,
-                                stop=stop, title=title, show=show)
+        return plot_ica_overlay(self, inst=inst, exclude=exclude, picks=picks,
+                                start=start, stop=stop, title=title, show=show)
 
     def detect_artifacts(self, raw, start_find=None, stop_find=None,
                          ecg_ch=None, ecg_score_func='pearsonr',
@@ -1423,11 +1386,9 @@ class ICA(ContainsMixin):
                          kurt_criterion=-1, var_criterion=0,
                          add_nodes=None):
         """Run ICA artifacts detection workflow.
-
         Note. This is still experimental and will most likely change. Over
         the next releases. For maximum control use the workflow exposed in
         the examples.
-
         Hints and caveats:
         - It is highly recommended to bandpass filter ECG and EOG
         data and pass them instead of the channel names as ecg_ch and eog_ch
@@ -1437,13 +1398,12 @@ class ICA(ContainsMixin):
         noise cannot be precluded.
         - Consider using shorter times for start_find and stop_find than
         for start and stop. It can save you much time.
-
         Example invocation (taking advantage of the defaults)::
-
             ica.detect_artifacts(ecg_channel='MEG 1531', eog_channel='EOG 061')
-
         Parameters
         ----------
+        raw : instance of Raw
+            Raw object to draw sources from.
         start_find : int | float | None
             First sample to include for artifact search. If float, data will be
             interpreted as time in seconds. If None, data will be used from the
@@ -1504,7 +1464,6 @@ class ICA(ContainsMixin):
             generalization of the artifact specific parameters above and has
             the same structure. Example:
             add_nodes=('ECG phase lock', ECG 01', my_phase_lock_function, 0.5)
-
         Returns
         -------
         self : instance of ICA
@@ -1554,7 +1513,6 @@ def ica_find_ecg_events(raw, ecg_source, event_id=999,
                         tstart=0.0, l_freq=5, h_freq=35, qrs_threshold='auto',
                         verbose=None):
     """Find ECG peaks from one selected ICA source
-
     Parameters
     ----------
     ecg_source : ndarray
@@ -1576,7 +1534,6 @@ def ica_find_ecg_events(raw, ecg_source, event_id=999,
         number of heartbeats (40-160 beats / min).
     verbose : bool, str, int, or None
         If not None, override default verbose level (see mne.verbose).
-
     Returns
     -------
     ecg_events : array
@@ -1605,7 +1562,6 @@ def ica_find_ecg_events(raw, ecg_source, event_id=999,
 def ica_find_eog_events(raw, eog_source=None, event_id=998, l_freq=1,
                         h_freq=10, verbose=None):
     """Locate EOG artifacts from one selected ICA source
-
     Parameters
     ----------
     raw : instance of Raw
@@ -1614,13 +1570,12 @@ def ica_find_eog_events(raw, eog_source=None, event_id=998, l_freq=1,
         ICA source resembling EOG to find peaks from.
     event_id : int
         The index to assign to found events.
-    low_pass : float
-        Low pass frequency.
-    high_pass : float
-        High pass frequency.
+    l_freq : float
+        Low cut-off frequency in Hz.
+    h_freq : float
+        High cut-off frequency in Hz.
     verbose : bool, str, int, or None
         If not None, override default verbose level (see mne.verbose).
-
     Returns
     -------
     eog_events : array
@@ -1692,7 +1647,6 @@ def _deserialize(str_, outer_sep=';', inner_sep=':'):
 
 def _write_ica(fid, ica):
     """Write an ICA object
-
     Parameters
     ----------
     fid: file
@@ -1764,13 +1718,11 @@ def _write_ica(fid, ica):
 @verbose
 def read_ica(fname):
     """Restore ICA solution from fif file.
-
     Parameters
     ----------
     fname : str
         Absolute path to fif file containing ICA matrices.
         The file name should end with -ica.fif or -ica.fif.gz.
-
     Returns
     -------
     ica : instance of ICA
@@ -1915,15 +1867,13 @@ def _detect_artifacts(ica, raw, start_find, stop_find, ecg_ch, ecg_score_func,
 @verbose
 def run_ica(raw, n_components, max_pca_components=100,
             n_pca_components=64, noise_cov=None, random_state=None,
-            verbose=None, picks=None, start=None, stop=None, start_find=None,
+            picks=None, start=None, stop=None, start_find=None,
             stop_find=None, ecg_ch=None, ecg_score_func='pearsonr',
             ecg_criterion=0.1, eog_ch=None, eog_score_func='pearsonr',
             eog_criterion=0.1, skew_criterion=-1, kurt_criterion=-1,
-            var_criterion=0, add_nodes=None):
+            var_criterion=0, add_nodes=None, verbose=None):
     """Run ICA decomposition on raw data and identify artifact sources
-
     This function implements an automated artifact removal work flow.
-
     Hints and caveats:
     - It is highly recommended to bandpass filter ECG and EOG
     data and pass them instead of the channel names as ecg_ch and eog_ch
@@ -1933,12 +1883,9 @@ def run_ica(raw, n_components, max_pca_components=100,
     noise cannot be precluded. If you are not sure set those to None.
     - Consider using shorter times for start_find and stop_find than
     for start and stop. It can save you much time.
-
     Example invocation (taking advantage of defaults):
-
     ica = run_ica(raw, n_components=.9, start_find=10000, stop_find=12000,
                   ecg_ch='MEG 1531', eog_ch='EOG 061')
-
     Parameters
     ----------
     raw : instance of Raw
@@ -1967,17 +1914,6 @@ def run_ica(raw, n_components, max_pca_components=100,
         np.random.RandomState to initialize the FastICA estimation.
         As the estimation is non-deterministic it can be useful to
         fix the seed to have reproducible results.
-    algorithm : {'parallel', 'deflation'}
-        Apply parallel or deflational algorithm for FastICA
-    fun : string or function, optional. Default: 'logcosh'
-        The functional form of the G function used in the
-        approximation to neg-entropy. Could be either 'logcosh', 'exp',
-        or 'cube'.
-        You can also provide your own function. It should return a tuple
-        containing the value of the function, and of its derivative, in the
-        point.
-    verbose : bool, str, int, or None
-        If not None, override default verbose level (see mne.verbose).
     picks : array-like of int
         Channels to be included. This selection remains throughout the
         initialized ICA solution. If None only good data channels are used.
@@ -2049,7 +1985,8 @@ def run_ica(raw, n_components, max_pca_components=100,
         generalization of the artifact specific parameters above and has
         the same structure. Example:
         add_nodes=('ECG phase lock', ECG 01', my_phase_lock_function, 0.5)
-
+    verbose : bool, str, int, or None
+        If not None, override default verbose level (see mne.verbose).
     Returns
     -------
     ica : instance of ICA
