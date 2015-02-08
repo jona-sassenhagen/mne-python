@@ -307,15 +307,13 @@ def mne_amica(data,
 
     paramfile = targetdir + 'paramfile'
 
-    print(data.shape[1])
-    print(data.shape[0])
-
     write_paramfile(outfile, targetdir, paramfile, max_iter=max_iter, chans = data.shape[1],
         length = data.shape[0],
         max_threads = max_threads, numprocs = numprocs, doPCA=0, num_mix_comps = 1)
     call([amica_binary + ' ' + paramfile], shell=True)
     
-    W, A, S = loadmodout_convert(targetdir)
+    targetdir2 = '/home/FB/fb05/sassenha/amicaouttmp/'
+    W, A, S = loadmodout_convert(targetdir2)
     
     # W: unmixing weights (post-sphering)
     # S: sphering matrix
