@@ -46,7 +46,7 @@ def write_paramfile(raw_data_file,
     am_dict['do_approx_sphere'] = 1
     am_dict['pdftype'] = 0
     am_dict['mineig'] = 1e-15
-    am_dict['pcakeep'] = max_pca_components
+    am_dict['pcakeep'] = chans
     am_dict['do_approx_sphere'] = 1
     am_dict['share_comps'] = 0
     am_dict['share_start'] = 100
