@@ -6,8 +6,7 @@ from scipy.special import gamma
 from subprocess import call
 
 
-def write_paramfile(raw_data,
-                    raw_data_file,
+def write_paramfile(raw_data_file,
                     paramdir,
                     paramfile,
                     do_reject = 1, 
@@ -20,14 +19,10 @@ def write_paramfile(raw_data,
                     minlrate = 1.000000e-08,
                     use_min_dll = 0,
                     numprocs = 1,
+                    n_chan = n_chan,
                     pcakeep = None):
 
     am_dict=OrderedDict()
-
-    #n_chan = len(raw_data.info['chs'])-1
-    n_chan = (raw_data[:][0]).shape[0]-1
-    if not pcakeep:
-        pcakeep = n_chan
 
     am_dict['files'] = raw_data_file
     am_dict['data_dim'] = n_chan
@@ -51,7 +46,7 @@ def write_paramfile(raw_data,
     am_dict['do_approx_sphere'] = 1
     am_dict['pdftype'] = 0
     am_dict['mineig'] = 1e-15
-    am_dict['pcakeep'] = pcakeep
+    am_dict['pcakeep'] = n_chan
     am_dict['do_approx_sphere'] = 1
     am_dict['share_comps'] = 0
     am_dict['share_start'] = 100
@@ -281,47 +276,40 @@ def loadmodout_convert(targetdir):
 
 def mne_amica(data,
               max_iter = 2000, 
-                 doPCA = 1, 
-               max_pca_components = None, 
             filter_low = 1, 
            filter_high = 40,
            n_chans = None, # adapt this so only a selection of channels can be included?
            max_threads = 1,
-           downsample = 100,
-           numprocs = 1,
+          numprocs = 1,
            outfile = None,
            amica_binary = None,
-           targetdir = '/tmp/'):
+           targetdir = '/tmp/',
+           max_pca_components = None):
 
     if not amica_binary:
         print("Please specify the full location of the amica binary!")
 
-    if not outfile:
-        outfile = "/".join(data.info["filename"].split("/")[:-1]) + "/" + "amtemp"
+    outfile = targetdir + "amtemp"
 
     r = data.copy()
-#    r.resample(downsample)
-#    r.filter(filter_low,filter_high, n_jobs=max_threads) # set n of jobs parametrically
-    if not n_chans:
-        n_chans = len(data.info['chs'])-1
     if not max_pca_components:
         pcakeep = n_chans
     else:
         pcakeep = max_pca_components
-    n_rank = r.estimate_rank()
+    n_rank = data.estimate_rank()
     if pcakeep > n_rank:
        print('''Non-fatal warning: 
     data is rank deficient (channel interpolated? reference included? comps removed?),
     consider using doPCA = 1 and pcakeep < less than the number of chans''')
 
-    d = np.asarray(r[:n_chans][0])*1000000
+    d = np.asarray(data)*1000000
     c = d.astype('<f32', copy=False).T
     c.tofile(outfile)
 
     paramfile = targetdir + 'paramfile'
 
-    write_paramfile(data, outfile, targetdir, paramfile, max_iter=max_iter, 
-        max_threads = max_threads, numprocs = numprocs, doPCA=1, pcakeep = max_pca_components, num_mix_comps = 1)
+    write_paramfile(outfile, targetdir, paramfile, max_iter=max_iter, n_chan = max_pca_components
+        max_threads = max_threads, numprocs = numprocs, doPCA=0, num_mix_comps = 1)
     call([amica_binary + ' ' + paramfile], shell=True)
     
     W, A, S = loadmodout_convert(targetdir)
