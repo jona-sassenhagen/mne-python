@@ -435,6 +435,9 @@ class ICA(ContainsMixin):
 
         if self.method != "amica":
             data = pca.fit_transform(data.T)
+        else:
+            dummy = pca.fit_transform(data.T)
+
 
         if isinstance(self.n_components, float):
             # compute eplained variance manually, cf. sklearn bug
