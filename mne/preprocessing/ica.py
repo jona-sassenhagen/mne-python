@@ -347,7 +347,8 @@ class ICA(ContainsMixin):
 
         self.n_samples_ = data.shape[1]
 
-        data, self._pre_whitener = self._pre_whiten(data,
+        if self.method != "amica":
+            data, self._pre_whitener = self._pre_whiten(data,
                                                     raw.info, picks)
 
         self._fit(data, self.max_pca_components, 'raw')
@@ -432,7 +433,8 @@ class ICA(ContainsMixin):
             # compute full feature variance before doing PCA
             full_var = np.var(data, axis=1).sum()
 
-        data = pca.fit_transform(data.T)
+        if self.method != "amica":
+            data = pca.fit_transform(data.T)
 
         if isinstance(self.n_components, float):
             # compute eplained variance manually, cf. sklearn bug
