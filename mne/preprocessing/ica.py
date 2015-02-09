@@ -449,10 +449,10 @@ class ICA(ContainsMixin):
                         n_components_)
             sel = slice(n_components_)
         else:
-            logger.info('Selection by number: %i components' %
-                        self.n_components)
             if self.n_components is not None:  # normal n case
                 sel = slice(self.n_components)
+                logger.info('Selection by number: %i components' %
+                        self.n_components)
             else:  # None case
                 logger.info('Using all PCA components: %i' 
                                           % pca.components_)
