@@ -47,7 +47,6 @@ def write_paramfile(raw_data_file,
     am_dict['pdftype'] = 0
     am_dict['mineig'] = 1e-15
     am_dict['pcakeep'] = chans
-    am_dict['do_approx_sphere'] = 1
     am_dict['share_comps'] = 0
     am_dict['share_start'] = 100
     am_dict['comp_thresh'] = '0.990000'
@@ -104,7 +103,7 @@ def write_paramfile(raw_data_file,
     am_dict['do_mean'] = 1
     am_dict['do_sphere'] = 1
     am_dict['doPCA'] = 0
-    am_dict['pcadb'] = '30.000000'
+#    am_dict['pcadb'] = '30.000000'
     am_dict['doscaling'] = 1
     am_dict['scalestep'] = 1
     
