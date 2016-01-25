@@ -6,7 +6,8 @@ import os.path as op
 import numpy as np
 import warnings
 
-from ..utils import _read_segments_file, _find_channels
+from ..utils import (_read_segments_file, _find_channels,
+                     _synthesize_stim_channel)
 from ..constants import FIFF
 from ..meas_info import _empty_info, create_info
 from ..base import _BaseRaw, _check_update_montage
@@ -108,6 +109,7 @@ def _get_info(eeg, montage, eog=()):
 
 
 def read_raw_eeglab(input_fname, montage=None, preload=False, eog=(),
+                    event_id=dict(), event_id_func="strip-to-int",
                     verbose=None):
     """Read an EEGLAB .set file
 
@@ -132,6 +134,20 @@ def read_raw_eeglab(input_fname, montage=None, preload=False, eog=(),
         Names or indices of channels that should be designated
         EOG channels. If 'auto', the channel names containing
         ``EOG`` or ``EYE`` are used. Defaults to empty tuple.
+    event_id : dict | None
+        The ids of the events to consider. If None (default),
+        `event_id_func` (see below) is called on every event value. If dict,
+        the keys will be mapped to trigger values on the stimulus channel
+        Keys are case-sensitive.
+        Example: {'SyncStatus': 1; 'Pulse Artifact': 3}.
+    event_id_func : callable | str | None
+        What to do for events not found in `event_id`. If callable, must
+        take one `str` argument and return an ìnt`. If a string, must be one
+        of the supported methods of parsing events. Currently, only
+        'strip-to-integer' is supported, which strips event codes such as
+        "D128" or "S  1" of their non-integer parts and returns the integer.
+        Any event that is not in `event_id` and cannot be parsed with this
+        function is dropped.
     verbose : bool, str, int, or None
         If not None, override default verbose level (see mne.verbose).
 
@@ -149,7 +165,8 @@ def read_raw_eeglab(input_fname, montage=None, preload=False, eog=(),
     mne.io.Raw : Documentation of attribute and methods.
     """
     return RawEEGLAB(input_fname=input_fname, montage=montage, preload=preload,
-                     eog=eog, verbose=verbose)
+                     eog=eog, event_id=event_id, event_id_func="strip-to-int",
+                     verbose=verbose)
 
 
 def read_epochs_eeglab(input_fname, events=None, event_id=None, montage=None,
@@ -226,6 +243,20 @@ class RawEEGLAB(_BaseRaw):
         Names or indices of channels that should be designated
         EOG channels. If 'auto', the channel names containing
         ``EOG`` or ``EYE`` are used. Defaults to empty tuple.
+    event_id : dict | None
+        The ids of the events to consider. If None (default),
+        `event_id_func` (see below) is called on every event value. If dict,
+        the keys will be mapped to trigger values on the stimulus channel
+        Keys are case-sensitive.
+        Example: {'SyncStatus': 1; 'Pulse Artifact': 3}.
+    event_id_func : callable | str | None
+        What to do for events not found in `event_id`. If callable, must
+        take one `str` argument and return an ìnt`. If a string, must be one
+        of the supported methods of parsing events. Currently, only
+        'strip-to-integer' is supported, which strips event codes such as
+        "D128" or "S  1" of their non-integer parts and returns the integer.
+        Any event that is not in `event_id` and cannot be parsed with this
+        function is dropped.
     verbose : bool, str, int, or None
         If not None, override default verbose level (see mne.verbose).
 
@@ -244,7 +275,7 @@ class RawEEGLAB(_BaseRaw):
     """
     @verbose
     def __init__(self, input_fname, montage, preload=False, eog=(),
-                 verbose=None):
+                 event_id=dict(), event_id_func='strip-to-int', verbose=None):
         """Read EEGLAB .set file.
         """
         from scipy import io
@@ -259,6 +290,23 @@ class RawEEGLAB(_BaseRaw):
 
         last_samps = [eeg.pnts - 1]
         info = _get_info(eeg, montage, eog=eog)
+
+        n_chan = len(info["chs"])
+        stimchan = dict(ch_name='STI 014', coil_type=FIFF.FIFFV_COIL_NONE,
+                        kind=FIFF.FIFFV_STIM_CH, logno=n_chan + 1,
+                        scanno=n_chan + 1, cal=1., range=1., loc=np.zeros(12),
+                        unit=FIFF.FIFF_UNIT_NONE, unit_mul=0.,
+                        coord_frame=FIFF.FIFFV_COORD_HEAD)
+        info['chs'].append(stimchan)
+        info["ch_names"].append("STI 014")
+        info['nchan'] += 1
+        if event_id_func == 'strip-to-int':
+            event_id_func = _strip_non_int_event
+
+        events = _read_eeglab_events(eeg, event_id=event_id,
+                                     event_id_func=event_id_func)
+        self._event_ch = _synthesize_stim_channel(events, eeg.pnts)
+
         # read the data
         if isinstance(eeg.data, string_types):
             data_fname = op.join(basedir, eeg.data)
@@ -285,7 +333,7 @@ class RawEEGLAB(_BaseRaw):
     def _read_segment_file(self, data, idx, fi, start, stop, cals, mult):
         """Read a chunk of raw data"""
         _read_segments_file(self, data, idx, fi, start, stop, cals, mult,
-                            dtype=np.float32)
+                            dtype=np.float32, stim_channel=True)
 
 
 class EpochsEEGLAB(_BaseEpochs):
@@ -304,11 +352,11 @@ class EpochsEEGLAB(_BaseEpochs):
         with each unique event encoded with a different integer.
     event_id : int | list of int | dict | None
         The id of the event to consider. If dict,
-        the keys can later be used to acces associated events. Example:
+        the keys can later be used to access associated events. Example:
         dict(auditory=1, visual=3). If int, a dict will be created with
         the id as string. If a list, all events with the IDs specified
         in the list are used. If None, the event_id is constructed from the
-        EEGLAB (.set) file with each descriptions copied from `eventtype`.
+        EEGLAB (.set) file with descriptions copied from `eventtype`.
     tmin : float
         Start time before event.
     baseline : None or tuple of length 2 (default (None, 0))
@@ -445,3 +493,60 @@ class EpochsEEGLAB(_BaseEpochs):
             reject=reject, flat=flat, reject_tmin=reject_tmin,
             reject_tmax=reject_tmax, add_eeg_ref=False, verbose=verbose)
         logger.info('Ready.')
+
+
+def _strip_non_int_event(t):
+    """Strip every non-digit from the input string and return the
+    concatenated integer."""
+    return int("".join([x for x in t if x.isdigit()]))
+
+
+def _read_eeglab_events(eeg, event_id=dict(),
+                            event_id_func=_strip_non_int_event):
+    """Create events array from EEGLAB structure by looking them up in the
+    event_id, trying to reduce them to their integer part otherwise, and
+    entirely dropping them (with a warning) if this is impossible.
+    Returns a 3x3 array of zeros if no events are found."""
+    types = [event.type for event in eeg.event]
+    latencies = [event.latency for event in eeg.event]
+
+    not_in_event_id = set([x for x in types if x not in event_id])
+    not_purely_numeric = set([x for x in not_in_event_id if not x.isdigit()])
+    no_numbers = set([x for x in not_purely_numeric
+                      if not any([d.isdigit() for d in x])])
+    have_integers = set([x for x in not_purely_numeric
+                         if x not in no_numbers])
+    if len(not_purely_numeric) > 0:
+        basewarn = "Events like the following will be dropped"
+        n_no_numbers, n_have_integers = len(no_numbers), len(have_integers)
+        if n_no_numbers > 0:
+            nonumwarm = " entirely: {}, {} in total"
+            warnings.warn(basewarn + nonumwarm.format(list(no_numbers)[:5],
+                                                      n_no_numbers))
+        if n_have_integers > 0 and event_id_func is None:
+            intwarn = (", but could be reduced to their integer part "
+                       "instead with `event_id_func='strip-to-integer'`: "
+                       "{}, {} in total")
+            warnings.warn(basewarn + intwarn.format(list(have_integers)[:5],
+                                                    n_have_integers))
+
+    events = list()
+    for t, latency in zip(types, latencies):
+        try:
+            event_code = event_id[t] if t in event_id else event_id_func(t)
+            events.append([int(latency), 1, event_code])
+        except ValueError:
+            pass  # We're already raising warnings above
+
+    if len(events) < len(types):
+            warnings.warn("Some event codes could not be mapped to integers."
+                          " Use the `event_id` keyword to"
+                          " map such events to integers manually.")
+
+    if len(events) < 3:
+        warnings.warn("No events found, consider adding an `event_id`."
+                      " As-is, the event channel will consist entirely"
+                      " of zeros.")
+        return np.zeros((3, 3))
+    else:
+        return np.asarray(events)
