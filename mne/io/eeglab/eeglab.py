@@ -19,6 +19,7 @@ from ...externals.six import string_types
 
 # just fix the scaling for now, EEGLAB doesn't seem to provide this info
 CAL = 1e-6
+_fmt_dtype_dict = dict(short='<i2', int='<i4', single='<f4', double='<f8')
 
 
 def _check_fname(fname):
@@ -303,9 +304,10 @@ class RawEEGLAB(_BaseRaw):
         if event_id_func == 'strip-to-int':
             event_id_func = _strip_non_int_event
 
+        self.preload = False  # so the event-setting works
         events = _read_eeglab_events(eeg, event_id=event_id,
                                      event_id_func=event_id_func)
-        self._event_ch = _synthesize_stim_channel(events, eeg.pnts)
+        self._create_event_ch(events, n_samp=eeg.pnts)
 
         # read the data
         if isinstance(eeg.data, string_types):
@@ -332,8 +334,33 @@ class RawEEGLAB(_BaseRaw):
 
     def _read_segment_file(self, data, idx, fi, start, stop, cals, mult):
         """Read a chunk of raw data"""
+        # read data
+        dtype = _fmt_dtype_dict[self.orig_format]
+        n_data_ch = len(self.ch_names) - 1
+ #       print(data.shape)
+ #       print(n_data_ch)
         _read_segments_file(self, data, idx, fi, start, stop, cals, mult,
-                            dtype=np.float32, stim_channel=True)
+                            dtype=dtype, n_channels=n_data_ch,
+#                            trig_func=self._add_trigger_ch
+                            )
+
+    def _add_trigger_ch(self, block, start, stop, sample_start, sample_stop):
+        """Callback function for adding the trigger channel."""
+        stim_ch = self._event_ch[start:stop][sample_start:sample_stop]
+        return np.vstack((block, stim_ch))
+
+    def _create_event_ch(self, events, n_samp=None):
+        """Create the event channel"""
+        if n_samp is None:
+            n_samp = self.last_samp - self.first_samp + 1
+        events = np.array(events, int)
+        if events.ndim != 2 or events.shape[1] != 3:
+            raise ValueError("[n_events x 3] shaped array required")
+        # update events
+        self._event_ch = _synthesize_stim_channel(events, n_samp)
+        self._events = events
+        if self.preload:
+            self._data[-1] = self._event_ch
 
 
 class EpochsEEGLAB(_BaseEpochs):
