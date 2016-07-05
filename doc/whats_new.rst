@@ -27,6 +27,8 @@ Changelog
 
     - Add second-order sections (instead of ``(b, a)`` form) IIR filtering for reduced numerical error by `Eric Larson`_
 
+    - Add interactive colormap option to image plotting functions by `Jaakko Leppakangas`_
+
 BUG
 ~~~
 
@@ -45,6 +47,10 @@ BUG
     - Fixed a bug where ``merge_grads=True`` causes :func:`mne.viz.plot_evoked_topo` to fail when plotting a list of evokeds by `Jaakko Leppakangas`_
 
     - Fixed a bug when setting multiple bipolar references with :func:`mne.io.set_bipolar_reference` by `Marijn van Vliet`_.
+
+    - Fix to image scaling in :func:`mne.viz.plot_epochs_image` when plotting more than one channel by `Jaakko Leppakangas`_
+
+    - Fix :class:`mne.preprocessing.Xdawn` to fit shuffled epochs, , by `Jean-Remi King`_
 
 API
 ~~~
@@ -66,6 +72,8 @@ API
     - Added option to pass a list of axes to :func:`mne.viz.epochs.plot_epochs_image` by `Mikołaj Magnuski`_
 
     - Constructing IIR filters in :func:`mne.filter.construct_iir_filter` defaults to ``output='ba'`` in 0.13 but this will be changed to ``output='sos'`` by `Eric Larson`_
+
+    - Add ``zorder`` parameter to :func:`mne.Evoked.plot` and derived functions to sort allow sorting channels by e.g. standard deviation, by `Jona Sassenhagen`_
 
 .. _changes_0_12:
 

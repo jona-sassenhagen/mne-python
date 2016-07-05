@@ -18,7 +18,7 @@ from ..io.pick import (channel_type, pick_types, _picks_by_type,
 from ..externals.six import string_types
 from ..defaults import _handle_default
 from .utils import (_draw_proj_checkbox, tight_layout, _check_delayed_ssp,
-                    plt_show, _process_times)
+                    plt_show, _process_times, DraggableColorbar)
 from ..utils import logger, _clean_names, warn
 from ..fixes import partial
 from ..io.pick import pick_info
@@ -26,6 +26,7 @@ from .topo import _plot_evoked_topo
 from .topomap import (_prepare_topo_plot, plot_topomap, _check_outlines,
                       _draw_outlines, _prepare_topomap, _topomap_animation)
 from ..channels import find_layout
+from ..channels.layout import _pair_grad_sensors
 
 
 def _butterfly_onpick(event, params):
@@ -71,6 +72,13 @@ def _butterfly_onselect(xmin, xmax, ch_types, evoked, text=None):
     """Function for drawing topomaps from the selected area."""
     import matplotlib.pyplot as plt
     ch_types = [type for type in ch_types if type in ('eeg', 'grad', 'mag')]
+    if ('grad' in ch_types and
+            len(_pair_grad_sensors(evoked.info, topomap_coords=False,
+                                   raise_error=False)) < 2):
+        ch_types.remove('grad')
+        if len(ch_types) == 0:
+            return
+
     vert_lines = list()
     if text is not None:
         text.set_visible(True)
@@ -91,9 +99,8 @@ def _butterfly_onselect(xmin, xmax, ch_types, evoked, text=None):
     fig, axarr = plt.subplots(1, len(ch_types), squeeze=False,
                               figsize=(3 * len(ch_types), 3))
     for idx, ch_type in enumerate(ch_types):
-        picks, pos, merge_grads, _, ch_type = _prepare_topo_plot(evoked,
-                                                                 ch_type,
-                                                                 layout=None)
+        picks, pos, merge_grads, _, ch_type = _prepare_topo_plot(
+            evoked, ch_type, layout=None)
         data = evoked.data[picks, minidx:maxidx]
         if merge_grads:
             from ..channels.layout import _merge_grad_data
@@ -181,7 +188,10 @@ def _plot_evoked(evoked, picks, exclude, unit, show,
                            ' for interactive SSP selection.')
     if isinstance(gfp, string_types) and gfp != 'only':
         raise ValueError('gfp must be boolean or "only". Got %s' % gfp)
-
+    if cmap == 'interactive':
+        cmap = (None, True)
+    elif not isinstance(cmap, tuple):
+        cmap = (cmap, True)
     scalings = _handle_default('scalings', scalings)
     titles = _handle_default('titles', titles)
     units = _handle_default('units', units)
@@ -312,27 +322,23 @@ def _plot_evoked(evoked, picks, exclude, unit, show,
                             if i in idx:
                                 colors[idx.index(i)] = 'r'
 
-                    # find the channels with the least activity
-                    # to map them in front of the more active ones
                     if zorder == 'std':
-                        def zorder_(D):
-                            return D.std(axis=1).argsort()
+                        # find the channels with the least activity
+                        # to map them in front of the more active ones
+                        z_ord = D.std(axis=1).argsort()
                     elif zorder == 'unsorted':
-                        def zorder_(D):
-                            return list(range(D.shape[0]))
+                        z_ord = list(range(D.shape[0]))
                     elif not callable(zorder):
                         error = ('`zorder` must be a function, "std" '
-                                 'or "unsorted", not {}.')
+                                 'or "unsorted", not {0}.')
                         raise TypeError(error.format(type(zorder)))
                     else:
-                        zorder_ = zorder
-
-                    z_ord = zorder_(D)
+                        z_ord = zorder(D)
 
                     # plot channels
                     for ch_idx, z in enumerate(z_ord):
                         line_list.append(ax.plot(times, D[ch_idx], picker=3.,
-                                                 zorder=z,
+                                                 zorder=1 + z,
                                                  color=colors[ch_idx])[0])
 
                 if gfp:  # 'only' or boolean True
@@ -369,9 +375,11 @@ def _plot_evoked(evoked, picks, exclude, unit, show,
             elif plot_type == 'image':
                 im = ax.imshow(D, interpolation='nearest', origin='lower',
                                extent=[times[0], times[-1], 0, D.shape[0]],
-                               aspect='auto', cmap=cmap)
+                               aspect='auto', cmap=cmap[0])
                 cbar = plt.colorbar(im, ax=ax)
                 cbar.ax.set_title(ch_unit)
+                if cmap[1]:
+                    ax.CB = DraggableColorbar(cbar, im)
                 ax.set_ylabel('channels (%s)' % 'index')
             else:
                 raise ValueError("plot_type has to be 'butterfly' or 'image'."
@@ -496,6 +504,9 @@ def plot_evoked(evoked, picks=None, exclude='bads', unit=True, show=True,
         If callable, must take one argument: a numpy array of the same
         dimensionality as the evoked raw data; and return a list of
         unique integers corresponding to the number of channels.
+
+        .. versionadded:: 0.13.0
+
     selectable : bool
         Whether to use interactive features. If True (default), it is possible
         to paint an area to draw topomaps. When False, the interactive features
@@ -681,8 +692,15 @@ def plot_evoked_image(evoked, picks=None, exclude='bads', unit=True, show=True,
         The axes to plot to. If list, the list must be a list of Axes of
         the same length as the number of channel types. If instance of
         Axes, there must be only one channel type plotted.
-    cmap : matplotlib colormap
-        Colormap.
+    cmap : matplotlib colormap | (colormap, bool) | 'interactive'
+        Colormap. If tuple, the first value indicates the colormap to use and
+        the second value is a boolean defining interactivity. In interactive
+        mode the colors are adjustable by clicking and dragging the colorbar
+        with left and right mouse button. Left mouse button moves the scale up
+        and down and right mouse button adjusts the range. Hitting space bar
+        resets the scale. Up and down arrows can be used to change the
+        colormap. If 'interactive', translates to ('RdBu_r', True). Defaults to
+        'RdBu_r'.
 
     Returns
     -------
@@ -1034,9 +1052,9 @@ def plot_evoked_joint(evoked, times="peaks", title='', picks=None,
     ts_args : None | dict
         A dict of `kwargs` that are forwarded to `evoked.plot` to
         style the butterfly plot. `axes` and `show` are ignored.
-        If `spatial_colors` is not in this dict, `spatial_colors=True`
-        will be passed. Beyond that, if ``None``, no customizable arguments
-        will be passed. Defaults to ``None``.
+        If `spatial_colors` is not in this dict, `spatial_colors=True`,
+        and (if it is not in the dict) `zorder='std'` will be passed.
+        Defaults to ``None``.
     topomap_args : None | dict
         A dict of `kwargs` that are forwarded to `evoked.plot_topomap`
         to style the topomaps. `axes` and `show` are ignored. If `times`

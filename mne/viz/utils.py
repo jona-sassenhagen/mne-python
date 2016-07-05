@@ -883,7 +883,7 @@ class ClickableImage(object):
 
     Parameters
     ----------
-    imdata: ndarray
+    imdata : ndarray
         The image that you wish to click on for 2-d points.
     **kwargs : dict
         Keyword arguments. Passed to ax.imshow.
@@ -915,7 +915,7 @@ class ClickableImage(object):
 
         Parameters
         ----------
-        event: matplotlib event object
+        event : matplotlib event object
             The matplotlib object that we use to get x/y position.
         """
         mouseevent = event.mouseevent
@@ -958,7 +958,7 @@ class ClickableImage(object):
         return lt
 
 
-def _fake_click(fig, ax, point, xform='ax', button=1):
+def _fake_click(fig, ax, point, xform='ax', button=1, kind='press'):
     """Helper to fake a click at a relative point within axes."""
     if xform == 'ax':
         x, y = ax.transAxes.transform_point(point)
@@ -966,10 +966,17 @@ def _fake_click(fig, ax, point, xform='ax', button=1):
         x, y = ax.transData.transform_point(point)
     else:
         raise ValueError('unknown transform')
+    if kind == 'press':
+        func = partial(fig.canvas.button_press_event, x=x, y=y, button=button)
+    elif kind == 'release':
+        func = partial(fig.canvas.button_release_event, x=x, y=y,
+                       button=button)
+    elif kind == 'motion':
+        func = partial(fig.canvas.motion_notify_event, x=x, y=y)
     try:
-        fig.canvas.button_press_event(x, y, button, False, None)
+        func(guiEvent=None)
     except Exception:  # for old MPL
-        fig.canvas.button_press_event(x, y, button, False)
+        func()
 
 
 def add_background_image(fig, im, set_ratios=None):
@@ -985,20 +992,20 @@ def add_background_image(fig, im, set_ratios=None):
 
     Parameters
     ----------
-    fig: plt.figure
+    fig : plt.figure
         The figure you wish to add a bg image to.
-    im: ndarray
+    im : ndarray
         A numpy array that works with a call to
         plt.imshow(im). This will be plotted
         as the background of the figure.
-    set_ratios: None | str
+    set_ratios : None | str
         Set the aspect ratio of any axes in fig
         to the value in set_ratios. Defaults to None,
         which does nothing to axes.
 
     Returns
     -------
-    ax_im: instance of the create matplotlib axis object
+    ax_im : instance of the created matplotlib axis object
         corresponding to the image you added.
 
     Notes
@@ -1010,7 +1017,7 @@ def add_background_image(fig, im, set_ratios=None):
         for ax in fig.axes:
             ax.set_aspect(set_ratios)
 
-    ax_im = fig.add_axes([0, 0, 1, 1])
+    ax_im = fig.add_axes([0, 0, 1, 1], label='background')
     ax_im.imshow(im, aspect='auto')
     ax_im.set_zorder(-1)
     return ax_im
@@ -1323,3 +1330,95 @@ def _compute_scalings(scalings, inst):
         scale_factor = np.max(np.abs(scale_factor))
         scalings[key] = scale_factor
     return scalings
+
+
+class DraggableColorbar(object):
+    """Class for enabling interactive colorbar.
+    See http://www.ster.kuleuven.be/~pieterd/python/html/plotting/interactive_colorbar.html
+    """  # noqa
+    def __init__(self, cbar, mappable):
+        import matplotlib.pyplot as plt
+        self.cbar = cbar
+        self.mappable = mappable
+        self.press = None
+        self.cycle = sorted([i for i in dir(plt.cm) if
+                             hasattr(getattr(plt.cm, i), 'N')])
+        self.index = self.cycle.index(cbar.get_cmap().name)
+        self.lims = (self.cbar.norm.vmin, self.cbar.norm.vmax)
+        self.connect()
+
+    def connect(self):
+        """Connect to all the events we need."""
+        self.cidpress = self.cbar.patch.figure.canvas.mpl_connect(
+            'button_press_event', self.on_press)
+        self.cidrelease = self.cbar.patch.figure.canvas.mpl_connect(
+            'button_release_event', self.on_release)
+        self.cidmotion = self.cbar.patch.figure.canvas.mpl_connect(
+            'motion_notify_event', self.on_motion)
+        self.keypress = self.cbar.patch.figure.canvas.mpl_connect(
+            'key_press_event', self.key_press)
+        self.scroll = self.cbar.patch.figure.canvas.mpl_connect(
+            'scroll_event', self.on_scroll)
+
+    def on_press(self, event):
+        """Callback for button press."""
+        if event.inaxes != self.cbar.ax:
+            return
+        self.press = event.y
+
+    def key_press(self, event):
+        """Callback for key press."""
+        if event.key == 'down':
+            self.index += 1
+        elif event.key == 'up':
+            self.index -= 1
+        elif event.key == ' ':  # space key resets scale
+            self.cbar.norm.vmin = self.lims[0]
+            self.cbar.norm.vmax = self.lims[1]
+        else:
+            return
+        if self.index < 0:
+            self.index = len(self.cycle) - 1
+        elif self.index >= len(self.cycle):
+            self.index = 0
+        cmap = self.cycle[self.index]
+        self.cbar.set_cmap(cmap)
+        self.cbar.draw_all()
+        self.mappable.set_cmap(cmap)
+        self.cbar.patch.figure.canvas.draw()
+
+    def on_motion(self, event):
+        """Callback for mouse movements."""
+        if self.press is None:
+            return
+        if event.inaxes != self.cbar.ax:
+            return
+        yprev = self.press
+        dy = event.y - yprev
+        self.press = event.y
+        scale = self.cbar.norm.vmax - self.cbar.norm.vmin
+        perc = 0.03
+        if event.button == 1:
+            self.cbar.norm.vmin -= (perc * scale) * np.sign(dy)
+            self.cbar.norm.vmax -= (perc * scale) * np.sign(dy)
+        elif event.button == 3:
+            self.cbar.norm.vmin -= (perc * scale) * np.sign(dy)
+            self.cbar.norm.vmax += (perc * scale) * np.sign(dy)
+        self.cbar.draw_all()
+        self.mappable.set_norm(self.cbar.norm)
+        self.cbar.patch.figure.canvas.draw()
+
+    def on_release(self, event):
+        """Callback for release."""
+        self.press = None
+        self.mappable.set_norm(self.cbar.norm)
+        self.cbar.patch.figure.canvas.draw()
+
+    def on_scroll(self, event):
+        """Callback for scroll."""
+        scale = 1.1 if event.step < 0 else 1. / 1.1
+        self.cbar.norm.vmin *= scale
+        self.cbar.norm.vmax *= scale
+        self.cbar.draw_all()
+        self.mappable.set_norm(self.cbar.norm)
+        self.cbar.patch.figure.canvas.draw()

@@ -67,7 +67,8 @@ install:
         fi;
       fi;
     - if [ "${DEPS}" == "nodata" ]; then
-        pip install -q flake8 codespell;
+        conda install --yes $ENSURE_PACKAGES sphinx;
+        pip install flake8 codespell numpydoc;
       fi;
     - pip install -q codecov nose-timer
     - if [ "${PYTHON}" == "2.6" ]; then
@@ -104,6 +105,7 @@ install:
         python -c 'import mne; mne.datasets.testing.data_path(verbose=True)';
         if [ "${DEPS}" == "full" ]; then
           export FREESURFER_HOME=$(python -c 'import mne; print(mne.datasets.testing.data_path())');
+          export MNE_SKIP_FS_FLASH_CALL=1;
         fi;
       else
         export MNE_SKIP_TESTING_DATASET_TESTS=true;

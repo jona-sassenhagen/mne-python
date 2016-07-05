@@ -56,12 +56,14 @@ class Evoked(ProjMixin, ContainsMixin, UpdateChannelsMixin,
         Dataset ID number (int) or comment/name (str). Optional if there is
         only one data set in file.
     baseline : tuple or list of length 2, or None
+        This parameter has been deprecated and will be removed in 0.14
+        Use inst.apply_baseline(baseline) instead.
         The time interval to apply rescaling / baseline correction.
         If None do not apply it. If baseline is (a, b)
         the interval is between "a (s)" and "b (s)".
         If a is None the beginning of the data is used
         and if b is None then b is set to the end of the interval.
-        If baseline is equal ot (None, None) all the time
+        If baseline is equal to (None, None) all the time
         interval is used. If None, no correction is applied.
     proj : bool, optional
         Apply SSP projection vectors
@@ -113,7 +115,38 @@ class Evoked(ProjMixin, ContainsMixin, UpdateChannelsMixin,
         # project and baseline correct
         if proj:
             self.apply_proj()
+        self.apply_baseline(baseline, self.verbose)
+
+    @verbose
+    def apply_baseline(self, baseline=(None, 0), verbose=None):
+        """Baseline correct evoked data
+
+        Parameters
+        ----------
+        baseline : tuple of length 2
+            The time interval to apply rescaling / baseline correction.
+            If None do not apply it. If baseline is (a, b)
+            the interval is between "a (s)" and "b (s)".
+            If a is None the beginning of the data is used
+            and if b is None then b is set to the end of the interval.
+            If baseline is equal to (None, None) all the time
+            interval is used. If None, no correction is applied.
+        verbose : bool, str, int, or None
+            If not None, override default verbose level (see mne.verbose).
+
+        Returns
+        -------
+        evoked : instance of Evoked
+            The baseline-corrected Evoked object.
+
+        Notes
+        -----
+        Baseline correction can be done multiple times.
+
+        .. versionadded:: 0.13.0
+        """
         self.data = rescale(self.data, self.times, baseline, copy=False)
+        return self
 
     def save(self, fname):
         """Save dataset to file.
@@ -302,6 +335,9 @@ class Evoked(ProjMixin, ContainsMixin, UpdateChannelsMixin,
             If callable, must take one argument: a numpy array of the same
             dimensionality as the evoked raw data; and return a list of
             unique integers corresponding to the number of channels.
+
+            .. versionadded:: 0.13.0
+
         selectable : bool
             Whether to use interactive features. If True (default), it is
             possible to paint an area to draw topomaps. When False, the
@@ -361,8 +397,15 @@ class Evoked(ProjMixin, ContainsMixin, UpdateChannelsMixin,
             The axes to plot to. If list, the list must be a list of Axes of
             the same length as the number of channel types. If instance of
             Axes, there must be only one channel type plotted.
-        cmap : matplotlib colormap
-            Colormap.
+        cmap : matplotlib colormap | (colormap, bool) | 'interactive'
+            Colormap. If tuple, the first value indicates the colormap to use
+            and the second value is a boolean defining interactivity. In
+            interactive mode the colors are adjustable by clicking and dragging
+            the colorbar with left and right mouse button. Left mouse button
+            moves the scale up and down and right mouse button adjusts the
+            range. Hitting space bar resets the scale. Up and down arrows can
+            be used to change the colormap. If 'interactive', translates to
+            ('RdBu_r', True). Defaults to 'RdBu_r'.
 
         Returns
         -------
@@ -486,9 +529,20 @@ class Evoked(ProjMixin, ContainsMixin, UpdateChannelsMixin,
             If None, the maximum absolute value is used. If vmin is None,
             but vmax is not, defaults to np.max(data).
             If callable, the output equals vmax(data).
-        cmap : matplotlib colormap | None
-            Colormap to use. If None, 'Reds' is used for all positive data,
-            otherwise defaults to 'RdBu_r'.
+        cmap : matplotlib colormap | (colormap, bool) | 'interactive' | None
+            Colormap to use. If tuple, the first value indicates the colormap
+            to use and the second value is a boolean defining interactivity. In
+            interactive mode the colors are adjustable by clicking and dragging
+            the colorbar with left and right mouse button. Left mouse button
+            moves the scale up and down and right mouse button adjusts the
+            range. Hitting space bar resets the range. Up and down arrows can
+            be used to change the colormap. If None (default), 'Reds' is used
+            for all positive data, otherwise defaults to 'RdBu_r'. If
+            'interactive', translates to (None, True).
+
+            .. warning::  Interactive mode works smoothly only for a small
+                amount of topomaps.
+
         sensors : bool | str
             Add markers for sensor locations to the plot. Accepts matplotlib
             plot format string (e.g., 'r+' for red plusses). If True, a circle
@@ -677,9 +731,9 @@ class Evoked(ProjMixin, ContainsMixin, UpdateChannelsMixin,
         ts_args : None | dict
             A dict of `kwargs` that are forwarded to `evoked.plot` to
             style the butterfly plot. `axes` and `show` are ignored.
-            If `spatial_colors` is not in this dict, `spatial_colors=True`
-            will be passed. Beyond that, if `None`, no customizable arguments
-            will be passed.
+            If `spatial_colors` is not in this dict, `spatial_colors=True`,
+            and (if it is not in the dict) `zorder='std'` will be passed.
+            Beyond that, if `None`, no customizable arguments will be passed.
         topomap_args : None | dict
             A dict of `kwargs` that are forwarded to `evoked.plot_topomap`
             to style the topomaps. `axes` and `show` are ignored. If `times`
@@ -1237,8 +1291,9 @@ def read_evokeds(fname, condition=None, baseline=None, kind='average',
         condition = [condition]
         return_list = False
 
-    out = [Evoked(fname, c, baseline=baseline, kind=kind, proj=proj,
-           verbose=verbose) for c in condition]
+    out = [Evoked(fname, c, kind=kind, proj=proj,
+                  verbose=verbose).apply_baseline(baseline)
+           for c in condition]
 
     return out if return_list else out[0]
 
