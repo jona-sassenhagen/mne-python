@@ -17,7 +17,8 @@ from nose.tools import assert_raises, assert_true, assert_equal
 import mne
 from mne import read_source_estimate
 from mne.datasets import testing
-from mne.stats.regression import linear_regression, linear_regression_raw
+from mne.stats.regression import (linear_regression, linear_regression_raw,
+                                  _prepare_rerp_data, _prepare_rerp_preds)
 from mne.io import RawArray
 from mne.utils import requires_sklearn
 
@@ -120,6 +121,11 @@ def test_continuous_regression_no_overlap():
     assert_raises(ValueError, linear_regression_raw, raw,
                   events, event_id, tmin, tmax, decim=2)
 
+    data, info, events = _prepare_rerp_data(raw, events)
+    X, conds, cond_length, tmin_s, tmax_s = _prepare_rerp_preds(
+        data.shape[1], info["sfreq"], events[1:], event_id=event_id,
+        tmin=-.1, tmax=.2)
+    assert_equal(*list(cond_length.values()))
 
 @requires_sklearn
 @testing.requires_testing_data

@@ -354,6 +354,7 @@ def _prepare_rerp_preds(n_samples, sfreq, events, event_id=None, tmin=-.1,
                    else event_id[cond])
             onsets = -(events[np.in1d(events[:, 2], ids), 0] + tmin_)
             values = np.ones((len(onsets), n_lags))
+            cond_length[cond] = n_lags
 
         else:  # for predictors from covariates, e.g. continuous ones
             covs = covariates[cond]
@@ -364,8 +365,8 @@ def _prepare_rerp_preds(n_samples, sfreq, events, event_id=None, tmin=-.1,
             onsets = -(events[np.where(covs != 0), 0] + tmin_)[0]
             v = np.asarray(covs)[np.nonzero(covs)].astype(float)
             values = np.ones((len(onsets), n_lags)) * v[:, np.newaxis]
+            cond_length[cond] = n_lags
 
-        cond_length[cond] = len(onsets)
         xs.append(sparse.dia_matrix((values, onsets),
                                     shape=(n_samples, n_lags)))
 
